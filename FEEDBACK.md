@@ -44,3 +44,14 @@ connect-to-arc page states it; the contract-addresses page should repeat it next
 The faucet is browser-only with reCAPTCHA; a rate-limited API for CI would help.
 Arc Studio is sandboxed and does not edit a local repo; a "pull from GitHub" import would let
 teams keep Foundry tests and Studio in sync.
+
+Galileo testnet has almost no live TeeML chat capacity. On Nov 7, 2026, of 8 services on
+InferenceServing 0xa79F…F91E and 11 on 0x41bD…85c5, one signature endpoint answered
+(qwen/qwen3.8-omni-flash, a centralized aliyun provider). The acknowledged glm-5.3 provider's
+dstack gateway returned 502; others pointed at hostnames that no longer resolve. Registry entries
+for dead providers should expire, and a status page would save builders an hour of probing.
+
+The router has no testnet: router-api.0g.ai ignores ?network=testnet and returns mainnet, and
+there is no router-api-testnet host. Testnet tooling has to fall back to getAllServices
+(which reverts on limit > 50, with an undecoded custom error).
+
