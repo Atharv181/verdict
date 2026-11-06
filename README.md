@@ -13,7 +13,7 @@ USDC escrow on Arc. Two LLM judges, a grounding check and a calibration pass dec
 
 > [!IMPORTANT]
 > **Status, honestly.** The escrows in [Live run](#live-run) settled on Arc testnet in **self-attested mode**. Real models (Groq: `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`) produced the verdicts, and the relayer kept the exact bytes and signed `sha256(req):sha256(resp)` with its own per-model key. In this mode **the relayer is a trusted signer**: it could sign a reply the API never sent. These runs prove the escrow, binding and policy logic end to end, not model provenance.
-> The 0G TeeML signer (enclave keys read from 0G `InferenceServing`) is fully implemented and covered by the contract tests, but it never ran live. A 0G ledger needs 3 0G, and we couldn't get that in time (the testnet faucet gives 0.1 0G/day). The contracts are identical in both modes; only the registered signers differ.
+> The 0G TeeML signer (enclave keys read from 0G `InferenceServing`) is fully implemented and covered by the contract tests, but it has not settled an escrow live. We funded a Galileo ledger (the SDK insists on 3 0G, but `LedgerManager` only requires `MIN_ACCOUNT_BALANCE` = 0.1 0G) and reached the one live Galileo TeeML provider. Its broker then refused the call: it requires **1.0 0G locked per provider**, and we had 0.1 locked out of about 0.5 testnet 0G in total. The contracts are identical in both modes; only the registered signers differ.
 
 A `VerdictEscrow` moves USDC only when a bundle of model outputs recovers, on-chain, to signing keys registered in `SignerRegistry`. With the 0G signer, those keys are the enclave keys 0G publishes in `InferenceServing`. Tamper one byte of the prompt or the reply and `ecrecover` returns a stranger. Replay a real verdict from another escrow and the hash binding rejects it.
 
@@ -156,7 +156,7 @@ Three signer modes, same contracts, chosen by `.env`:
 | Mode | Signer | Judges | Cost | Status |
 |---|---|---|---|---|
 | **Two-model TeeML** (`JUDGES=2`) | 0G mainnet `16661` enclave keys | 2 distinct model families must agree | ~4.5 0G deposit, < 1 0G spent | implemented and tested; never run live (unfunded) |
-| **Single-judge TeeML** (`JUDGES=1`) | 0G Galileo `16602` enclave key | 1 judge + grounding + calibration | ~3.5 faucet 0G | implemented; signer mirrored; never run live (faucet gives 0.1 0G/day) |
+| **Single-judge TeeML** (`JUDGES=1`) | 0G Galileo `16602` enclave key | 1 judge + grounding + calibration | ≥ 1.1 testnet 0G (ledger ≥ 0.1 + 1.0 locked per provider, the broker's reserve) | implemented; signer mirrored; ledger funded ([`0x494c1356…`](https://chainscan-galileo.0g.ai/tx/0x494c1356b8956b646305e4d379870f6e64292da91717ab2f39ab4dd08dfa14a3)); the call was refused by the broker: below the 1.0 0G reserve |
 | **Self-attested** (`groq:<model>` ids) | relayer key per model | 2 distinct model families must agree | free (Groq free tier) | **used for the [live run](#live-run)** |
 
 ### Self-attested (live run)
