@@ -14,8 +14,10 @@ import { expectedSignedText } from "./zg";
 
 // extra: request fields per backend. Groq returns a `reasoning` field for gpt-oss/qwen that can
 // quote a draft "VERDICT:" header; the oracle reads the first one in the bytes, so drop it.
+// Hidden reasoning still spends completion tokens: 1200 can run out before the answer (empty
+// content), so Groq gets a larger cap. The 900-char rationale limit is enforced separately.
 const BACKENDS: Record<string, { url: string; keyEnv: string; extra?: Record<string, unknown> }> = {
-  groq: { url: "https://api.groq.com/openai/v1/chat/completions", keyEnv: "GROQ_API_KEY", extra: { include_reasoning: false } },
+  groq: { url: "https://api.groq.com/openai/v1/chat/completions", keyEnv: "GROQ_API_KEY", extra: { include_reasoning: false, max_tokens: 4096 } },
   gemini: { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", keyEnv: "GEMINI_API_KEY" },
 };
 

@@ -24,6 +24,7 @@
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
   button:disabled{opacity:.5;cursor:default}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  [hidden]{display:none !important}
   .pill{font-family:var(--mono);font-size:12px;background:#0e1118;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--mute)}
   .pill.ok{color:var(--good);border-color:var(--good)}.pill.bad{color:var(--bad);border-color:var(--bad)}.pill.warn{color:var(--warn);border-color:var(--warn)}
   pre{background:#0e1118;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:10px 0 0;max-height:360px}
@@ -90,6 +91,12 @@ Lighthouse report (mobile): performance 94, accessibility 100, best practices 10
     <h2 style="margin-top:18px"><span class="n">3</span>Escrow state</h2>
     <div class="row"><input id="lookup" placeholder="escrow id 0x…" style="flex:1" /><button id="load" class="ghost" style="margin:0">Load</button></div>
     <div class="kv" id="state"></div>
+    <div class="row" id="actions" hidden>
+      <button id="arbRelease" class="ghost" style="margin:0">Arbiter: release to payee</button>
+      <button id="arbRefund" class="ghost" style="margin:0">Arbiter: refund payer</button>
+      <button id="lateRefund" class="ghost" style="margin:0">Payer: refund after deadline</button>
+    </div>
+    <pre id="actOut" hidden></pre>
   </section>
 
   <section class="wide">
@@ -125,6 +132,8 @@ const escrowAbi = parseAbi([
   "struct Attested { bytes reqBody; bytes respBody; bytes signature; address provider; }",
   "function open(address payee, address arbiter, uint96 amount, uint64 deadline, string rubric, Policy policy) returns (bytes32)",
   "function setEvidence(bytes32 id, bytes32 evidenceHash, string storageRef)",
+  "function arbitrate(bytes32 id, bool release)",
+  "function refundAfterDeadline(bytes32 id)",
   "function settle(bytes32 id, Attested[] judges, Attested grounding, Attested calibration, string[] requestIds)",
   "function get(bytes32 id) view returns ((address payer, address payee, address arbiter, uint96 amount, uint64 deadline, bytes32 rubricHash, bytes32 evidenceHash, (uint8 judges, uint8 minAgree, uint16 minConfBps, bool requireGrounded) policy, uint8 state))",
   "event Opened(bytes32 indexed id, address indexed payer, address indexed payee, uint96 amount, uint64 deadline, bytes32 rubricHash, string rubric)",
@@ -187,6 +196,17 @@ $("open").onclick = async () => {
 
 // ---- 2. evidence
 const updateEv = () => { $("evHash").textContent = keccak256(toHex($("evidence").value)); }; $("evidence").oninput = updateEv; updateEv();
+async function act(fn, args) {
+  try {
+    need();
+    const h = await wallet.writeContract({ account, address: A.escrow, abi: escrowAbi, functionName: fn, args });
+    show("actOut", `${fn} ${link(h)}\nwaiting…`); await arc.waitForTransactionReceipt({ hash: h });
+    show("actOut", `${fn} ${link(h)}\nconfirmed.`); $("load").onclick();
+  } catch (e) { show("actOut", String(e.shortMessage ?? e.message ?? e)); }
+}
+$("arbRelease").onclick = () => act("arbitrate", [$("lookup").value.trim(), true]);
+$("arbRefund").onclick = () => act("arbitrate", [$("lookup").value.trim(), false]);
+$("lateRefund").onclick = () => act("refundAfterDeadline", [$("lookup").value.trim()]);
 $("setEv").onclick = async () => {
   try {
     need();
@@ -202,6 +222,11 @@ $("load").onclick = async () => {
     const e = await arc.readContract({ address: A.escrow, abi: escrowAbi, functionName: "get", args: [$("lookup").value.trim()] });
     const rows = [["state", STATE[e.state]], ["payer", e.payer], ["payee", e.payee], ["arbiter", e.arbiter], ["amount", formatUnits(e.amount, 6) + " USDC"], ["deadline", new Date(Number(e.deadline) * 1000).toISOString()], ["rubricHash", e.rubricHash], ["evidenceHash", e.evidenceHash], ["policy", `${e.policy.judges} judges · ${e.policy.minAgree} agree · conf ≥ ${e.policy.minConfBps / 10000} · grounded=${e.policy.requireGrounded}`]];
     $("state").innerHTML = rows.map(([k, v]) => `<b>${k}</b><code>${v}</code>`).join("");
+    // Escalated: only the arbiter can decide. Open/Escalated past the deadline: the payer can take the funds back.
+    const st = STATE[e.state], late = Date.now() / 1000 > Number(e.deadline);
+    $("arbRelease").hidden = $("arbRefund").hidden = st !== "Escalated";
+    $("lateRefund").hidden = !((st === "Open" || st === "Escalated") && late);
+    $("actions").hidden = $("arbRelease").hidden && $("lateRefund").hidden;
   } catch (e) { $("state").innerHTML = `<b>error</b><code>${e.shortMessage ?? e.message ?? e}</code>`; }
 };
 
