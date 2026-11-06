@@ -40,7 +40,7 @@
 <header>
   <div>
     <h1><span>Verdict</span> — TEE-attested AI oracle</h1>
-    <div class="sub">USDC escrow on Arc that settles only when 0G enclaves signed the verdict. Everything on this page talks to Arc testnet and 0G mainnet directly.</div>
+    <div class="sub">USDC escrow on Arc that settles only when 0G enclaves signed the verdict. Everything on this page talks to Arc testnet and 0G chain directly.</div>
   </div>
   <div class="row">
     <span id="net" class="pill">Arc testnet 5042002</span>
@@ -72,7 +72,7 @@ Pass only if ALL of the following are present in the evidence:
 1. A public repository URL on github.com.
 2. A deployed URL that responds over https.
 3. A Lighthouse performance score of 90 or higher, stated as a number.</textarea>
-    <div class="row"><span class="pill">policy: 2 judges · 2 agree · conf ≥ 0.85 · grounded</span></div>
+    <div class="row"><span class="pill" id="polPill">policy: 2 judges · 2 agree · conf ≥ 0.85 · grounded</span></div>
     <button id="open">Approve + open</button>
     <pre id="openOut" hidden></pre>
   </section>
@@ -94,7 +94,7 @@ Lighthouse report (mobile): performance 94, accessibility 100, best practices 10
 
   <section class="wide">
     <h2><span class="n">4</span>Verify a settlement yourself</h2>
-    <p style="margin:0 0 6px;color:var(--mute);font-size:13px">Paste a <code>settle</code> transaction hash. The page decodes the calldata, recomputes <code>sha256(request):sha256(response)</code> for every attestation, recovers the EIP-191 signer, reads the provider's record from 0G mainnet <code>InferenceServing</code>, and compares. No server involved.</p>
+    <p style="margin:0 0 6px;color:var(--mute);font-size:13px">Paste a <code>settle</code> transaction hash. The page decodes the calldata, recomputes <code>sha256(request):sha256(response)</code> for every attestation, recovers the EIP-191 signer, reads the provider's record from 0G <code>InferenceServing</code>, and compares. No server involved.</p>
     <div class="row"><input id="txh" placeholder="0x… settle tx on Arc testnet" style="flex:1" /><button id="verify" class="ghost" style="margin:0">Verify</button></div>
     <pre id="verOut" hidden></pre>
   </section>
@@ -106,7 +106,7 @@ Lighthouse report (mobile): performance 94, accessibility 100, best practices 10
       <b>VerdictOracle</b><code id="aOracle">—</code>
       <b>SignerRegistry</b><code id="aRegistry">—</code>
       <b>USDC (Arc)</b><code>0x3600000000000000000000000000000000000000</code>
-      <b>0G InferenceServing</b><code>0x47340d900bdFec2BD393c626E12ea0656F938d84 (mainnet, chain 16661)</code>
+      <b>0G InferenceServing</b><code id="aServing">0x47340d900bdFec2BD393c626E12ea0656F938d84 (mainnet, chain 16661)</code>
     </div>
     <p style="color:var(--mute);font-size:12px;margin:10px 0 0">Addresses load from <code>addresses.json</code> next to this page; override with <code>?escrow=0x…&amp;oracle=0x…&amp;registry=0x…</code>.</p>
   </section>
@@ -117,9 +117,7 @@ Lighthouse report (mobile): performance 94, accessibility 100, best practices 10
 import { createPublicClient, createWalletClient, custom, http, parseAbi, keccak256, toHex, hexToBytes, decodeFunctionData, recoverMessageAddress, parseUnits, formatUnits } from "https://esm.sh/viem@2.21.55";
 
 const ARC = { id: 5042002, name: "Arc Testnet", nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.testnet.arc.io"] } }, blockExplorers: { default: { name: "Arc Explorer", url: "https://explorer.testnet.arc.io" } } };
-const ZG = { id: 16661, name: "0G", nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 }, rpcUrls: { default: { http: ["https://evmrpc.0g.ai"] } } };
 const USDC = "0x3600000000000000000000000000000000000000";
-const INFERENCE_SERVING = "0x47340d900bdFec2BD393c626E12ea0656F938d84";
 
 const erc20 = parseAbi(["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)", "function balanceOf(address) view returns (uint256)"]);
 const escrowAbi = parseAbi([
@@ -138,12 +136,17 @@ const servingAbi = [{ type: "function", name: "getService", stateMutability: "vi
 const STATE = ["None", "Open", "Resolved", "Refunded", "Escalated"];
 const $ = (id) => document.getElementById(id);
 const arc = createPublicClient({ chain: ARC, transport: http() });
-const zg = createPublicClient({ chain: ZG, transport: http() });
 
-// ---- addresses
+// ---- addresses (+ which 0G chain the signers live on, and the judge count the relayer runs)
 const q = new URLSearchParams(location.search);
 let A = { escrow: q.get("escrow"), oracle: q.get("oracle"), registry: q.get("registry") };
-try { const j = await (await fetch("./addresses.json", { cache: "no-store" })).json(); A = { escrow: A.escrow ?? j.escrow, oracle: A.oracle ?? j.oracle, registry: A.registry ?? j.registry }; } catch {}
+let ZGCFG = { chainId: 16661, rpc: "https://evmrpc.0g.ai", inferenceServing: "0x47340d900bdFec2BD393c626E12ea0656F938d84" };
+let JUDGES = 2;
+try { const j = await (await fetch("./addresses.json", { cache: "no-store" })).json(); A = { escrow: A.escrow ?? j.escrow, oracle: A.oracle ?? j.oracle, registry: A.registry ?? j.registry }; if (j.zg) ZGCFG = j.zg; if (j.judges) JUDGES = j.judges; } catch {}
+const INFERENCE_SERVING = ZGCFG.inferenceServing;
+const zg = createPublicClient({ chain: { id: ZGCFG.chainId, name: "0G", nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 }, rpcUrls: { default: { http: [ZGCFG.rpc] } } }, transport: http() });
+$("aServing").textContent = `${INFERENCE_SERVING} (${ZGCFG.chainId === 16661 ? "mainnet" : "Galileo testnet"}, chain ${ZGCFG.chainId})`;
+$("polPill").textContent = `policy: ${JUDGES} judge${JUDGES > 1 ? "s" : ""} · ${JUDGES} agree · conf ≥ 0.85 · grounded`;
 $("aEscrow").textContent = A.escrow ?? "not deployed yet"; $("aOracle").textContent = A.oracle ?? "not deployed yet"; $("aRegistry").textContent = A.registry ?? "not deployed yet";
 const show = (id, text) => { const el = $(id); el.hidden = false; el.textContent = text; };
 const link = (h) => `${ARC.blockExplorers.default.url}/tx/${h}`;
@@ -168,7 +171,7 @@ $("open").onclick = async () => {
     const amount = parseUnits($("amount").value || "0", 6);
     const payee = $("payee").value.trim(); const arbiter = $("arbiter").value.trim() || "0x0000000000000000000000000000000000000000";
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number($("days").value || 7) * 86400);
-    const policy = { judges: 2, minAgree: 2, minConfBps: 8500, requireGrounded: true };
+    const policy = { judges: JUDGES, minAgree: JUDGES, minConfBps: 8500, requireGrounded: true };
     const allowance = await arc.readContract({ address: USDC, abi: erc20, functionName: "allowance", args: [account, A.escrow] });
     let log = "";
     if (allowance < amount) { const h = await wallet.writeContract({ account, address: USDC, abi: erc20, functionName: "approve", args: [A.escrow, amount] }); log += `approve ${link(h)}\n`; await arc.waitForTransactionReceipt({ hash: h }); show("openOut", log); }

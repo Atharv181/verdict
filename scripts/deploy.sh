@@ -24,7 +24,9 @@ cat > web/addresses.json <<JSON
   "escrow": "$ESC",
   "oracle": "$ORA",
   "registry": "$REG",
-  "explorer": "https://explorer.testnet.arc.io"
+  "explorer": "https://explorer.testnet.arc.io",
+  "judges": ${JUDGES:-2},
+  "zg": { "chainId": ${ZG_CHAIN_ID:-16661}, "rpc": "${ZG_RPC:-https://evmrpc.0g.ai}", "inferenceServing": "${ZG_INFERENCE_SERVING:-0x47340d900bdFec2BD393c626E12ea0656F938d84}" }
 }
 JSON
 echo

@@ -4,5 +4,7 @@
   "escrow": "0x49bdAB3BAdDdCed369347b89325b7Af058440359",
   "oracle": "0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE",
   "registry": "0x0148950580C3F20855b49f199CF254D602E489A6",
-  "explorer": "https://explorer.testnet.arc.io"
+  "explorer": "https://explorer.testnet.arc.io",
+  "judges": 1,
+  "zg": { "chainId": 16602, "rpc": "https://evmrpc-testnet.0g.ai", "inferenceServing": "0xa79F4c8311FF93C06b8CfB403690cc987c93F91E" }
 }
