@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Verdict — TEE-attested AI oracle</title>
+<meta name="description" content="USDC escrow on Arc that settles only on enclave-signed model verdicts from 0G Compute." />
+<style>
+  :root{--bg:#0b0d12;--panel:#12151d;--line:#1f2430;--ink:#e8ebf2;--mute:#8b93a7;--acc:#5b8cff;--good:#2fbf71;--warn:#f5a524;--bad:#ff5c5c;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,sans-serif}
+  header{padding:28px 20px 12px;max-width:1080px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:22px;margin:0;letter-spacing:-.01em}h1 span{color:var(--acc)}
+  .sub{color:var(--mute);font-size:13px;margin-top:4px}
+  main{max-width:1080px;margin:0 auto;padding:8px 20px 60px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  section.wide{grid-column:1/-1}
+  h2{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  h2 .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px}
+  label{display:block;font-size:12px;color:var(--mute);margin:10px 0 4px}
+  input,textarea,select{width:100%;background:#0e1118;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit}
+  textarea{min-height:92px;font-family:var(--mono);font-size:12.5px}
+  button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;margin-top:12px}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  button:disabled{opacity:.5;cursor:default}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .pill{font-family:var(--mono);font-size:12px;background:#0e1118;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--mute)}
+  .pill.ok{color:var(--good);border-color:var(--good)}.pill.bad{color:var(--bad);border-color:var(--bad)}.pill.warn{color:var(--warn);border-color:var(--warn)}
+  pre{background:#0e1118;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:10px 0 0;max-height:360px}
+  .kv{display:grid;grid-template-columns:140px 1fr;gap:4px 10px;font-size:13px;margin-top:8px}.kv b{color:var(--mute);font-weight:500}
+  .kv code{font-family:var(--mono);font-size:12px;word-break:break-all}
+  a{color:var(--acc)}
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-size:12px}
+  .flow div{background:#0e1118;border:1px solid var(--line);border-radius:8px;padding:10px}.flow b{display:block;color:var(--ink);margin-bottom:4px}
+  @media(max-width:860px){.flow{grid-template-columns:1fr 1fr}}
+  footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mute);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><span>Verdict</span> — TEE-attested AI oracle</h1>
+    <div class="sub">USDC escrow on Arc that settles only when 0G enclaves signed the verdict. Everything on this page talks to Arc testnet and 0G mainnet directly.</div>
+  </div>
+  <div class="row">
+    <span id="net" class="pill">Arc testnet 5042002</span>
+    <button id="connect" class="ghost" style="margin:0">Connect wallet</button>
+  </div>
+</header>
+
+<main>
+  <section class="wide">
+    <h2>How a verdict moves money</h2>
+    <div class="flow">
+      <div><b>1 · Lock</b>Payer locks USDC against a rubric. Only keccak(rubric) is stored.</div>
+      <div><b>2 · Evidence</b>Payee commits keccak(evidence). The prompt will name both hashes.</div>
+      <div><b>3 · Judge</b>Relayer calls 4 TeeML models directly, keeps the exact request and response bytes.</div>
+      <div><b>4 · Sign</b>Each enclave signs sha256(req):sha256(resp) with its on-chain key.</div>
+      <div><b>5 · Settle</b>Contract re-hashes, ecrecovers, checks the registry and the header, moves USDC.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">1</span>Open an escrow</h2>
+    <label>Payee address</label><input id="payee" placeholder="0x…" />
+    <label>Arbiter (optional, human fallback on escalation)</label><input id="arbiter" placeholder="0x… or empty" />
+    <label>Amount (USDC)</label><input id="amount" value="1.00" />
+    <label>Deadline (days)</label><input id="days" value="7" />
+    <label>Rubric</label>
+    <textarea id="rubric">Deliverable: a landing page for "Verdict".
+Pass only if ALL of the following are present in the evidence:
+1. A public repository URL on github.com.
+2. A deployed URL that responds over https.
+3. A Lighthouse performance score of 90 or higher, stated as a number.</textarea>
+    <div class="row"><span class="pill">policy: 2 judges · 2 agree · conf ≥ 0.85 · grounded</span></div>
+    <button id="open">Approve + open</button>
+    <pre id="openOut" hidden></pre>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Commit evidence</h2>
+    <label>Escrow id</label><input id="eid" placeholder="0x…" />
+    <label>Evidence (hashed client-side; the hash goes on-chain and into every judge prompt)</label>
+    <textarea id="evidence">Repository: https://github.com/verdict-oracle/landing
+Deployed: https://verdict-landing.vercel.app (HTTP 200, TLS valid)
+Lighthouse report (mobile): performance 94, accessibility 100, best practices 100, SEO 100.</textarea>
+    <div class="kv"><b>keccak(evidence)</b><code id="evHash">—</code></div>
+    <button id="setEv">Set evidence (payee)</button>
+    <pre id="evOut" hidden></pre>
+    <h2 style="margin-top:18px"><span class="n">3</span>Escrow state</h2>
+    <div class="row"><input id="lookup" placeholder="escrow id 0x…" style="flex:1" /><button id="load" class="ghost" style="margin:0">Load</button></div>
+    <div class="kv" id="state"></div>
+  </section>
+
+  <section class="wide">
+    <h2><span class="n">4</span>Verify a settlement yourself</h2>
+    <p style="margin:0 0 6px;color:var(--mute);font-size:13px">Paste a <code>settle</code> transaction hash. The page decodes the calldata, recomputes <code>sha256(request):sha256(response)</code> for every attestation, recovers the EIP-191 signer, reads the provider's record from 0G mainnet <code>InferenceServing</code>, and compares. No server involved.</p>
+    <div class="row"><input id="txh" placeholder="0x… settle tx on Arc testnet" style="flex:1" /><button id="verify" class="ghost" style="margin:0">Verify</button></div>
+    <pre id="verOut" hidden></pre>
+  </section>
+
+  <section class="wide">
+    <h2>Deployment</h2>
+    <div class="kv">
+      <b>VerdictEscrow</b><code id="aEscrow">—</code>
+      <b>VerdictOracle</b><code id="aOracle">—</code>
+      <b>SignerRegistry</b><code id="aRegistry">—</code>
+      <b>USDC (Arc)</b><code>0x3600000000000000000000000000000000000000</code>
+      <b>0G InferenceServing</b><code>0x47340d900bdFec2BD393c626E12ea0656F938d84 (mainnet, chain 16661)</code>
+    </div>
+    <p style="color:var(--mute);font-size:12px;margin:10px 0 0">Addresses load from <code>addresses.json</code> next to this page; override with <code>?escrow=0x…&amp;oracle=0x…&amp;registry=0x…</code>.</p>
+  </section>
+</main>
+<footer>Verdict · ETHGlobal Mumbai 2026 · 0G Private Computer × Arc. Source: see repository README.</footer>
+
+<script type="module">
+import { createPublicClient, createWalletClient, custom, http, parseAbi, keccak256, toHex, hexToBytes, decodeFunctionData, recoverMessageAddress, parseUnits, formatUnits } from "https://esm.sh/viem@2.21.55";
+
+const ARC = { id: 5042002, name: "Arc Testnet", nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.testnet.arc.io"] } }, blockExplorers: { default: { name: "Arc Explorer", url: "https://explorer.testnet.arc.io" } } };
+const ZG = { id: 16661, name: "0G", nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 }, rpcUrls: { default: { http: ["https://evmrpc.0g.ai"] } } };
+const USDC = "0x3600000000000000000000000000000000000000";
+const INFERENCE_SERVING = "0x47340d900bdFec2BD393c626E12ea0656F938d84";
+
+const erc20 = parseAbi(["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)", "function balanceOf(address) view returns (uint256)"]);
+const escrowAbi = parseAbi([
+  "struct Policy { uint8 judges; uint8 minAgree; uint16 minConfBps; bool requireGrounded; }",
+  "struct Attested { bytes reqBody; bytes respBody; bytes signature; address provider; }",
+  "function open(address payee, address arbiter, uint96 amount, uint64 deadline, string rubric, Policy policy) returns (bytes32)",
+  "function setEvidence(bytes32 id, bytes32 evidenceHash, string storageRef)",
+  "function settle(bytes32 id, Attested[] judges, Attested grounding, Attested calibration, string[] requestIds)",
+  "function get(bytes32 id) view returns ((address payer, address payee, address arbiter, uint96 amount, uint64 deadline, bytes32 rubricHash, bytes32 evidenceHash, (uint8 judges, uint8 minAgree, uint16 minConfBps, bool requireGrounded) policy, uint8 state))",
+  "event Opened(bytes32 indexed id, address indexed payer, address indexed payee, uint96 amount, uint64 deadline, bytes32 rubricHash, string rubric)",
+]);
+const registryAbi = parseAbi(["function providerOf(address) view returns (address)", "function isSigner(address) view returns (bool)"]);
+const servingAbi = [{ type: "function", name: "getService", stateMutability: "view", inputs: [{ name: "provider", type: "address" }], outputs: [{ name: "s", type: "tuple", components: [
+  { name: "provider", type: "address" }, { name: "serviceType", type: "string" }, { name: "url", type: "string" }, { name: "inputPrice", type: "uint256" }, { name: "outputPrice", type: "uint256" }, { name: "updatedAt", type: "uint256" }, { name: "model", type: "string" }, { name: "verifiability", type: "string" }, { name: "additionalInfo", type: "string" }, { name: "teeSignerAddress", type: "address" }, { name: "teeSignerAcknowledged", type: "bool" } ] }] }];
+
+const STATE = ["None", "Open", "Resolved", "Refunded", "Escalated"];
+const $ = (id) => document.getElementById(id);
+const arc = createPublicClient({ chain: ARC, transport: http() });
+const zg = createPublicClient({ chain: ZG, transport: http() });
+
+// ---- addresses
+const q = new URLSearchParams(location.search);
+let A = { escrow: q.get("escrow"), oracle: q.get("oracle"), registry: q.get("registry") };
+try { const j = await (await fetch("./addresses.json", { cache: "no-store" })).json(); A = { escrow: A.escrow ?? j.escrow, oracle: A.oracle ?? j.oracle, registry: A.registry ?? j.registry }; } catch {}
+$("aEscrow").textContent = A.escrow ?? "not deployed yet"; $("aOracle").textContent = A.oracle ?? "not deployed yet"; $("aRegistry").textContent = A.registry ?? "not deployed yet";
+const show = (id, text) => { const el = $(id); el.hidden = false; el.textContent = text; };
+const link = (h) => `${ARC.blockExplorers.default.url}/tx/${h}`;
+
+// ---- wallet
+let wallet, account;
+$("connect").onclick = async () => {
+  if (!window.ethereum) return alert("No injected wallet found. Install MetaMask or similar.");
+  wallet = createWalletClient({ chain: ARC, transport: custom(window.ethereum) });
+  [account] = await wallet.requestAddresses();
+  try { await wallet.switchChain({ id: ARC.id }); } catch { await wallet.addChain({ chain: ARC }); await wallet.switchChain({ id: ARC.id }); }
+  $("connect").textContent = account.slice(0, 6) + "…" + account.slice(-4);
+  const bal = await arc.readContract({ address: USDC, abi: erc20, functionName: "balanceOf", args: [account] });
+  $("net").textContent = `Arc testnet · ${formatUnits(bal, 6)} USDC`; $("net").className = "pill ok";
+};
+const need = () => { if (!account) throw new Error("connect a wallet first"); if (!A.escrow) throw new Error("no escrow address: deploy first or pass ?escrow="); };
+
+// ---- 1. open
+$("open").onclick = async () => {
+  try {
+    need();
+    const amount = parseUnits($("amount").value || "0", 6);
+    const payee = $("payee").value.trim(); const arbiter = $("arbiter").value.trim() || "0x0000000000000000000000000000000000000000";
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + Number($("days").value || 7) * 86400);
+    const policy = { judges: 2, minAgree: 2, minConfBps: 8500, requireGrounded: true };
+    const allowance = await arc.readContract({ address: USDC, abi: erc20, functionName: "allowance", args: [account, A.escrow] });
+    let log = "";
+    if (allowance < amount) { const h = await wallet.writeContract({ account, address: USDC, abi: erc20, functionName: "approve", args: [A.escrow, amount] }); log += `approve ${link(h)}\n`; await arc.waitForTransactionReceipt({ hash: h }); show("openOut", log); }
+    const h = await wallet.writeContract({ account, address: A.escrow, abi: escrowAbi, functionName: "open", args: [payee, arbiter, amount, deadline, $("rubric").value, policy] });
+    log += `open ${link(h)}\n`; show("openOut", log + "waiting…");
+    const r = await arc.waitForTransactionReceipt({ hash: h });
+    const ev = r.logs.find((l) => l.address.toLowerCase() === A.escrow.toLowerCase());
+    const id = ev?.topics?.[1];
+    show("openOut", log + `escrow id ${id}\nrubricHash ${keccak256(toHex($("rubric").value))}`);
+    $("eid").value = id ?? ""; $("lookup").value = id ?? "";
+  } catch (e) { show("openOut", String(e.shortMessage ?? e.message ?? e)); }
+};
+
+// ---- 2. evidence
+const updateEv = () => { $("evHash").textContent = keccak256(toHex($("evidence").value)); }; $("evidence").oninput = updateEv; updateEv();
+$("setEv").onclick = async () => {
+  try {
+    need();
+    const h = await wallet.writeContract({ account, address: A.escrow, abi: escrowAbi, functionName: "setEvidence", args: [$("eid").value.trim(), keccak256(toHex($("evidence").value)), "inline"] });
+    show("evOut", `setEvidence ${link(h)}\nwaiting…`); await arc.waitForTransactionReceipt({ hash: h }); show("evOut", `setEvidence ${link(h)}\nconfirmed. Now run the relayer: bun run src/e2e.ts (or POST /verdict).`);
+  } catch (e) { show("evOut", String(e.shortMessage ?? e.message ?? e)); }
+};
+
+// ---- 3. state
+$("load").onclick = async () => {
+  try {
+    if (!A.escrow) throw new Error("no escrow address");
+    const e = await arc.readContract({ address: A.escrow, abi: escrowAbi, functionName: "get", args: [$("lookup").value.trim()] });
+    const rows = [["state", STATE[e.state]], ["payer", e.payer], ["payee", e.payee], ["arbiter", e.arbiter], ["amount", formatUnits(e.amount, 6) + " USDC"], ["deadline", new Date(Number(e.deadline) * 1000).toISOString()], ["rubricHash", e.rubricHash], ["evidenceHash", e.evidenceHash], ["policy", `${e.policy.judges} judges · ${e.policy.minAgree} agree · conf ≥ ${e.policy.minConfBps / 10000} · grounded=${e.policy.requireGrounded}`]];
+    $("state").innerHTML = rows.map(([k, v]) => `<b>${k}</b><code>${v}</code>`).join("");
+  } catch (e) { $("state").innerHTML = `<b>error</b><code>${e.shortMessage ?? e.message ?? e}</code>`; }
+};
+
+// ---- 4. independent verification
+const sha256hex = async (u8) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", u8))].map((b) => b.toString(16).padStart(2, "0")).join("");
+$("verify").onclick = async () => {
+  try {
+    const hash = $("txh").value.trim();
+    const t = await arc.getTransaction({ hash });
+    const { functionName, args } = decodeFunctionData({ abi: escrowAbi, data: t.input });
+    if (functionName !== "settle") throw new Error(`not a settle tx: ${functionName}`);
+    const [id, judges, grounding, calibration, ids] = args;
+    const all = [...judges.map((j, i) => ({ role: `judge ${i + 1}`, ...j })), { role: "grounding", ...grounding }, { role: "calibration", ...calibration }];
+    let out = `escrow ${id}\n\n`; let ok = true;
+    for (const [i, a] of all.entries()) {
+      const req = hexToBytes(a.reqBody), resp = hexToBytes(a.respBody);
+      const text = `${await sha256hex(req)}:${await sha256hex(resp)}`;
+      const signer = await recoverMessageAddress({ message: text, signature: a.signature });
+      const json = JSON.parse(new TextDecoder().decode(resp));
+      const content = json.choices?.[0]?.message?.content ?? "";
+      const s = await zg.readContract({ address: INFERENCE_SERVING, abi: servingAbi, functionName: "getService", args: [a.provider] });
+      let expected = s.teeSignerAddress; try { const info = JSON.parse(s.additionalInfo || "{}"); if (info.TargetSeparated && info.ProviderType !== "centralized" && info.TargetTeeAddress) expected = info.TargetTeeAddress; } catch {}
+      const match = expected.toLowerCase() === signer.toLowerCase(); if (!match) ok = false;
+      const reg = A.registry ? await arc.readContract({ address: A.registry, abi: registryAbi, functionName: "isSigner", args: [signer] }) : "n/a";
+      out += `${a.role}  ${content.slice(0, 20)}  model ${s.model}  ${s.verifiability}\n  signed text   ${text}\n  recovered     ${signer}\n  0G Service    ${expected}  ${match ? "✓ MATCH" : "✗ MISMATCH"}\n  registry      ${reg}   response id ${ids[i]}\n  provider url  ${s.url}\n\n`;
+      show("verOut", out);
+    }
+    show("verOut", out + (ok ? "ALL SIGNATURES RECOVER TO ENCLAVE SIGNERS PUBLISHED ON 0G CHAIN" : "VERIFICATION FAILED"));
+  } catch (e) { show("verOut", String(e.shortMessage ?? e.message ?? e)); }
+};
+</script>
+</body>
+</html>
