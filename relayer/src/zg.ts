@@ -38,6 +38,29 @@ export const inferenceServingAbi = [
       ],
     }],
   },
+  {
+    type: "function", name: "getAllServices", stateMutability: "view",
+    inputs: [{ name: "offset", type: "uint256" }, { name: "limit", type: "uint256" }],
+    outputs: [
+      {
+        name: "services", type: "tuple[]",
+        components: [
+          { name: "provider", type: "address" },
+          { name: "serviceType", type: "string" },
+          { name: "url", type: "string" },
+          { name: "inputPrice", type: "uint256" },
+          { name: "outputPrice", type: "uint256" },
+          { name: "updatedAt", type: "uint256" },
+          { name: "model", type: "string" },
+          { name: "verifiability", type: "string" },
+          { name: "additionalInfo", type: "string" },
+          { name: "teeSignerAddress", type: "address" },
+          { name: "teeSignerAcknowledged", type: "bool" },
+        ],
+      },
+      { name: "total", type: "uint256" },
+    ],
+  },
 ] as const;
 
 export interface ServiceRecord {
@@ -87,7 +110,7 @@ let brokerPromise: ReturnType<typeof createZGComputeNetworkBroker> | undefined;
 
 export function zgWallet(): ethers.Wallet {
   const pk = process.env.ZG_PRIVATE_KEY;
-  if (!pk) throw new Error("ZG_PRIVATE_KEY is not set. Direct mode needs a 0G mainnet wallet funded with >= 6 0G (see README).");
+  if (!pk) throw new Error("ZG_PRIVATE_KEY is not set. Direct mode needs a 0G wallet (Galileo testnet or mainnet) funded with >= 3 0G ledger + 1 0G per provider (see README).");
   return new ethers.Wallet(pk, new ethers.JsonRpcProvider(ZG_RPC));
 }
 
@@ -173,13 +196,43 @@ export async function teeModels(): Promise<{ id: string; type: string; verifiabi
   }));
 }
 
-/** First TeeML provider the router lists for a model (public endpoint, no key). */
+/** True when ZG_CHAIN_ID is 0G mainnet; the public router only catalogs mainnet. */
+export const ZG_IS_MAINNET = zgChain.id === 16661;
+
+/** Every TeeML service on InferenceServing whose signer 0G has acknowledged. */
+export async function chainTeeServices() {
+  const out: { provider: Address; model: string; signer: Address }[] = [];
+  const page = 50n;
+  for (let offset = 0n; ; offset += page) {
+    const [services, total] = await zgClient.readContract({
+      address: INFERENCE_SERVING, abi: inferenceServingAbi, functionName: "getAllServices", args: [offset, page],
+    });
+    for (const s of services) {
+      if (s.verifiability === "TeeML" && s.teeSignerAcknowledged) {
+        out.push({ provider: s.provider, model: s.model, signer: s.teeSignerAddress });
+      }
+    }
+    if (offset + page >= total) break;
+  }
+  return out;
+}
+
+/**
+ * TeeML provider for a model. Order: PROVIDER_<MODEL> env override, then the public router
+ * (mainnet only), otherwise InferenceServing.getAllServices on the configured 0G chain.
+ */
 export async function pickProvider(model: string): Promise<Address> {
   const env = process.env[`PROVIDER_${model.replace(/[^a-z0-9]/gi, "_").toUpperCase()}`];
   if (env) return env as Address;
-  const res = await fetch(`${ROUTER}/providers?model=${encodeURIComponent(model)}`);
-  const j: any = await res.json();
-  const p = (j.data as any[]).find((x) => x.verifiability === "TeeML" && x.address && x.tee_acknowledged);
-  if (!p) throw new Error(`no TeeML provider listed for ${model}`);
-  return p.address as Address;
+  if (ZG_IS_MAINNET && process.env.ZG_PROVIDER_SOURCE !== "chain") {
+    const res = await fetch(`${ROUTER}/providers?model=${encodeURIComponent(model)}`);
+    const j: any = await res.json();
+    const p = (j.data as any[]).find((x) => x.verifiability === "TeeML" && x.address && x.tee_acknowledged);
+    if (!p) throw new Error(`no TeeML provider listed for ${model}`);
+    return p.address as Address;
+  }
+  const want = model.toLowerCase();
+  const p = (await chainTeeServices()).find((s) => s.model.toLowerCase() === want);
+  if (!p) throw new Error(`no acknowledged TeeML service for ${model} on ${INFERENCE_SERVING} (chain ${zgChain.id})`);
+  return p.provider;
 }

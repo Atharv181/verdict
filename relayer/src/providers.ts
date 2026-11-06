@@ -1,15 +1,22 @@
-// Lists the router's providers for a model, reads each one's Service record from 0G chain,
-// and probes the provider's signature endpoint. No API key needed.
+// Lists providers for a model (public router on mainnet; InferenceServing.getAllServices on
+// testnet), reads each one's Service record from 0G chain, and probes the provider's
+// signature endpoint. No API key needed.
 //   bun run src/providers.ts [model]
 
 import type { Address } from "viem";
-import { ROUTER, getService, INFERENCE_SERVING, ZG_RPC } from "./zg";
+import { ROUTER, getService, INFERENCE_SERVING, ZG_RPC, ZG_IS_MAINNET, chainTeeServices } from "./zg";
 
 const model = process.argv[2] ?? "glm-5.3";
-const res = await fetch(`${ROUTER}/providers?model=${encodeURIComponent(model)}`);
-const j: any = await res.json();
-const list: any[] = j.data ?? j.providers ?? j;
-console.log(`router providers for ${model}: ${Array.isArray(list) ? list.length : JSON.stringify(j).slice(0, 300)}`);
+let list: any[];
+if (ZG_IS_MAINNET) {
+  const res = await fetch(`${ROUTER}/providers?model=${encodeURIComponent(model)}`);
+  const j: any = await res.json();
+  list = j.data ?? j.providers ?? j;
+  console.log(`router providers for ${model}: ${Array.isArray(list) ? list.length : JSON.stringify(j).slice(0, 300)}`);
+} else {
+  list = (await chainTeeServices()).filter((s) => s.model.toLowerCase() === model.toLowerCase());
+  console.log(`on-chain acknowledged TeeML services for ${model}: ${list.length}`);
+}
 console.log(`InferenceServing ${INFERENCE_SERVING} via ${ZG_RPC}\n`);
 
 for (const p of Array.isArray(list) ? list : []) {

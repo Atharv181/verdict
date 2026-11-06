@@ -1,12 +1,12 @@
 // Registry mirror: copies 0G InferenceServing Service records (provider -> enclave signer)
 // into SignerRegistry on Arc, recording the 0G block they were read at.
 //   bun run src/registry-mirror.ts <provider> [<provider> ...]
-// With no arguments, mirrors the TeeML providers the router lists for the four pipeline models
-// (public endpoint, no key needed).
+// With no arguments, mirrors the TeeML provider pickProvider finds for each pipeline model
+// (router on mainnet, InferenceServing on testnet; no key needed).
 
 import { zeroHash, type Address } from "viem";
 import { addr, publicClient, registryAbi, tx, wallet } from "./arc";
-import { MODELS } from "./judges";
+import { PIPELINE_MODELS } from "./judges";
 import { getService, pickProvider } from "./zg";
 
 export async function mirrorProvider(provider: Address, log = console.log) {
@@ -31,8 +31,7 @@ export async function mirrorProvider(provider: Address, log = console.log) {
 if (import.meta.main) {
   let providers = process.argv.slice(2) as Address[];
   if (providers.length === 0) {
-    const models = [...new Set(Object.values(MODELS))];
-    const found = await Promise.all(models.map(async (m) => [m, await pickProvider(m)] as const));
+    const found = await Promise.all(PIPELINE_MODELS.map(async (m) => [m, await pickProvider(m)] as const));
     for (const [m, p] of found) console.log(`  ${m} -> ${p}`);
     providers = [...new Set(found.map(([, p]) => p))];
   }

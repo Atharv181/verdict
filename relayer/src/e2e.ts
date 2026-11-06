@@ -1,7 +1,7 @@
 // End-to-end on Arc testnet with real 0G inference (Direct mode):
 //   1. payer opens a USDC escrow against a rubric
 //   2. payee commits the evidence hash
-//   3. relayer runs 4 TeeML model calls, fetches enclave signatures, verifies them over the exact bytes
+//   3. relayer runs 3-4 TeeML model calls (JUDGES=1|2), fetches enclave signatures, verifies them over the exact bytes
 //   4. registry mirror makes sure every signer is registered (reads 0G chain)
 //   5. anyone submits settle(); the contract re-hashes the bytes, recovers the signers, moves USDC
 //
@@ -11,7 +11,7 @@
 
 import { keccak256, toHex, type Hex } from "viem";
 import { addr, erc20Abi, escrowAbi, oracleAbi, OUTCOME, publicClient, STATE, tx, USDC, wallet } from "./arc";
-import { buildBundle, toAttestedArg } from "./judges";
+import { buildBundle, JUDGES, toAttestedArg } from "./judges";
 import { mirrorProvider } from "./registry-mirror";
 import type { Case } from "./types";
 
@@ -56,7 +56,7 @@ if (allowance < amount) {
   console.log("approve", tx(h));
 }
 const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 3600);
-const policy = { judges: 2, minAgree: 2, minConfBps: 8500, requireGrounded: true };
+const policy = { judges: JUDGES, minAgree: JUDGES, minConfBps: 8500, requireGrounded: true };
 const openHash = await payer.client.writeContract({
   address: escrow, abi: escrowAbi, functionName: "open",
   args: [payee.account.address, payer.account.address, amount, deadline, RUBRIC, policy],

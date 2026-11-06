@@ -5,12 +5,14 @@
 
 import { keccak256, toHex } from "viem";
 import { buildHeader } from "./header";
-import { directChat, expectedSignedText, fetchSignature, getService, pickProvider, teeModels, verifyAttestation } from "./zg";
+import { directChat, expectedSignedText, fetchSignature, getService, pickProvider, teeModels, verifyAttestation, ZG_IS_MAINNET } from "./zg";
 
-const model = process.argv[2] ?? "glm-5.3";
+const model = process.argv[2] ?? process.env.JUDGE_A ?? "glm-5.3";
 
-console.log("TeeML models on the router:");
-for (const m of await teeModels()) console.log(`  ${m.id.padEnd(24)} ${m.type.padEnd(16)} ${m.verifiability} providers=${m.provider_count}`);
+if (ZG_IS_MAINNET) { // the public router only catalogs mainnet
+  console.log("TeeML models on the router:");
+  for (const m of await teeModels()) console.log(`  ${m.id.padEnd(24)} ${m.type.padEnd(16)} ${m.verifiability} providers=${m.provider_count}`);
+}
 
 const provider = await pickProvider(model);
 const svc = await getService(provider);
