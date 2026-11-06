@@ -313,4 +313,42 @@ contract VerdictTest is Test {
         assertEq(conf, 10000);
         assertEq(m, keccak256("glm-5.3"));
     }
+
+    // ---- single-judge mode (Galileo testnet: one live TeeML provider) ----------
+
+    /// One judge; grounding and calibration come from the same provider and enclave key.
+    function singleJudge(string memory v, string memory g, string memory conf)
+        internal
+        returns (bytes32 id, VerdictOracle.Attested[] memory j, VerdictOracle.Attested memory gr, VerdictOracle.Attested memory c)
+    {
+        VerdictOracle.Policy memory one = VerdictOracle.Policy({judges: 1, minAgree: 1, minConfBps: 8500, requireGrounded: true});
+        vm.prank(payer);
+        id = escrow.open(payee, arbiter, 50e6, uint64(block.timestamp + 7 days), RUBRIC, one);
+        vm.prank(payee);
+        escrow.setEvidence(id, keccak256(bytes(EVIDENCE)), "0g://root");
+        (bytes32 r, bytes32 e) = hashes();
+        bytes memory req = reqBody(r, e);
+        j = new VerdictOracle.Attested[](1);
+        j[0] = attest(PK_A, provA, req, respBody(string.concat(header(v, "0.95", r, e), "All three items present.")));
+        gr = attest(PK_A, provA, req, respBody(string.concat(header(g, "0.99", r, e), "0 unsupported claims.")));
+        c = attest(PK_A, provA, req, respBody(string.concat(header("Y", conf, r, e), "Evidence is explicit.")));
+    }
+
+    function test_SingleJudge_ReleaseOnYes() public {
+        (bytes32 id, VerdictOracle.Attested[] memory j, VerdictOracle.Attested memory g, VerdictOracle.Attested memory c) = singleJudge("Y", "Y", "0.95");
+        string[] memory rids = new string[](3);
+        rids[0] = "req-a"; rids[1] = "req-g"; rids[2] = "req-c";
+        escrow.settle(id, j, g, c, rids);
+        assertEq(usdc.balanceOf(payee), 50e6);
+        assertEq(uint8(escrow.get(id).state), uint8(VerdictEscrow.State.Resolved));
+    }
+
+    function test_SingleJudge_EscalateWhenUngrounded() public {
+        (bytes32 id, VerdictOracle.Attested[] memory j, VerdictOracle.Attested memory g, VerdictOracle.Attested memory c) = singleJudge("Y", "N", "0.95");
+        string[] memory rids = new string[](3);
+        rids[0] = "req-a"; rids[1] = "req-g"; rids[2] = "req-c";
+        escrow.settle(id, j, g, c, rids);
+        assertEq(uint8(escrow.get(id).state), uint8(VerdictEscrow.State.Escalated));
+        assertEq(usdc.balanceOf(payee), 0);
+    }
 }
