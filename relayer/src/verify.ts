@@ -21,6 +21,7 @@ const registry = addr("SIGNER_REGISTRY");
 console.log(`escrow ${id}`);
 const all = [...judges.map((j: any, i: number) => ({ role: `judge ${i + 1}`, ...j })), { role: "grounding", ...grounding }, { role: "calibration", ...calibration }];
 let ok = true;
+let selfCount = 0;
 for (const [i, a] of all.entries()) {
   const req = hexToBytes(a.reqBody), resp = hexToBytes(a.respBody);
   const text = await expectedSignedText(req, resp);
@@ -28,6 +29,17 @@ for (const [i, a] of all.entries()) {
   const json = JSON.parse(new TextDecoder().decode(resp));
   const h = parseHeader(json.choices[0].message.content);
   const registered = await publicClient.readContract({ address: registry, abi: registryAbi, functionName: "providerOf", args: [signer] });
+  if (a.provider.toLowerCase() === signer.toLowerCase()) {
+    // self-attested mode (selfsign.ts): provider id == signer, nothing on 0G to compare against
+    const reg = registered.toLowerCase() === signer.toLowerCase();
+    console.log(`${a.role.padEnd(12)} verdict=${h.verdict} conf=${h.conf} model=${json.model ?? "?"}`);
+    console.log(`             signed text ${text}`);
+    console.log(`             recovered ${signer}  SELF-ATTESTED (relayer key, not an enclave)  registry ${reg ? "OK" : "MISSING"}`);
+    console.log(`             response id ${requestIds[i]}`);
+    if (!reg) ok = false;
+    selfCount++;
+    continue;
+  }
   const svc = await getService(a.provider);
   const matches = svc.signer.toLowerCase() === signer.toLowerCase();
   console.log(`${a.role.padEnd(12)} verdict=${h.verdict} conf=${h.conf} model=${svc.model}`);
@@ -36,4 +48,6 @@ for (const [i, a] of all.entries()) {
   console.log(`             response id ${requestIds[i]}  registry.providerOf ${registered}`);
   if (!matches) ok = false;
 }
-console.log(ok ? "\nall signatures recover to the enclave signers published on 0G chain" : "\nFAILED");
+console.log(!ok ? "\nFAILED" : selfCount
+  ? `\nall signatures recover to registered signers; ${selfCount} of ${all.length} are self-attested by the relayer (not enclave-backed)`
+  : "\nall signatures recover to the enclave signers published on 0G chain");

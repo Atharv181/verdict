@@ -5,6 +5,10 @@
   "oracle": "0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE",
   "registry": "0x0148950580C3F20855b49f199CF254D602E489A6",
   "explorer": "https://explorer.testnet.arc.io",
-  "judges": 1,
-  "zg": { "chainId": 16602, "rpc": "https://evmrpc-testnet.0g.ai", "inferenceServing": "0xa79F4c8311FF93C06b8CfB403690cc987c93F91E" }
+  "judges": 2,
+  "zg": {
+    "chainId": 16661,
+    "rpc": "https://evmrpc.0g.ai",
+    "inferenceServing": "0x47340d900bdFec2BD393c626E12ea0656F938d84"
+  }
 }

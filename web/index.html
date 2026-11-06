@@ -215,13 +215,19 @@ $("verify").onclick = async () => {
     if (functionName !== "settle") throw new Error(`not a settle tx: ${functionName}`);
     const [id, judges, grounding, calibration, ids] = args;
     const all = [...judges.map((j, i) => ({ role: `judge ${i + 1}`, ...j })), { role: "grounding", ...grounding }, { role: "calibration", ...calibration }];
-    let out = `escrow ${id}\n\n`; let ok = true;
+    let out = `escrow ${id}\n\n`; let ok = true; let selfCount = 0;
     for (const [i, a] of all.entries()) {
       const req = hexToBytes(a.reqBody), resp = hexToBytes(a.respBody);
       const text = `${await sha256hex(req)}:${await sha256hex(resp)}`;
       const signer = await recoverMessageAddress({ message: text, signature: a.signature });
       const json = JSON.parse(new TextDecoder().decode(resp));
       const content = json.choices?.[0]?.message?.content ?? "";
+      if (a.provider.toLowerCase() === signer.toLowerCase()) { // self-attested: relayer key, nothing on 0G
+        const reg = A.registry ? await arc.readContract({ address: A.registry, abi: registryAbi, functionName: "isSigner", args: [signer] }) : false;
+        if (!reg) ok = false; selfCount++;
+        out += `${a.role}  ${content.slice(0, 20)}  model ${json.model ?? "?"}\n  signed text   ${text}\n  recovered     ${signer}\n  SELF-ATTESTED by the relayer (not an enclave)   registry ${reg}   response id ${ids[i]}\n\n`;
+        show("verOut", out); continue;
+      }
       const s = await zg.readContract({ address: INFERENCE_SERVING, abi: servingAbi, functionName: "getService", args: [a.provider] });
       let expected = s.teeSignerAddress; try { const info = JSON.parse(s.additionalInfo || "{}"); if (info.TargetSeparated && info.ProviderType !== "centralized" && info.TargetTeeAddress) expected = info.TargetTeeAddress; } catch {}
       const match = expected.toLowerCase() === signer.toLowerCase(); if (!match) ok = false;
@@ -229,7 +235,7 @@ $("verify").onclick = async () => {
       out += `${a.role}  ${content.slice(0, 20)}  model ${s.model}  ${s.verifiability}\n  signed text   ${text}\n  recovered     ${signer}\n  0G Service    ${expected}  ${match ? "✓ MATCH" : "✗ MISMATCH"}\n  registry      ${reg}   response id ${ids[i]}\n  provider url  ${s.url}\n\n`;
       show("verOut", out);
     }
-    show("verOut", out + (ok ? "ALL SIGNATURES RECOVER TO ENCLAVE SIGNERS PUBLISHED ON 0G CHAIN" : "VERIFICATION FAILED"));
+    show("verOut", out + (!ok ? "VERIFICATION FAILED" : selfCount ? `ALL SIGNATURES RECOVER TO REGISTERED SIGNERS (${selfCount} of ${all.length} SELF-ATTESTED BY THE RELAYER, NOT ENCLAVE-BACKED)` : "ALL SIGNATURES RECOVER TO ENCLAVE SIGNERS PUBLISHED ON 0G CHAIN"));
   } catch (e) { show("verOut", String(e.shortMessage ?? e.message ?? e)); }
 };
 </script>

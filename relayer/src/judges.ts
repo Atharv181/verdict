@@ -6,6 +6,7 @@
 import type { Address } from "viem";
 import { HEADER_LEN, parseHeader } from "./header";
 import type { Attested, Bundle, Case } from "./types";
+import { isSelfModel, selfChat, type SelfResult } from "./selfsign";
 import { directChat, expectedSignedText, fetchSignature, getService, pickProvider, verifyAttestation, type ServiceRecord } from "./zg";
 
 // TeeML chat models on the 0G router (verifiability: "TeeML" on GET /v1/models).
@@ -73,35 +74,48 @@ async function service(provider: Address): Promise<ServiceRecord> {
 
 /** One attested call: direct inference, header validation, signature fetch, byte-exact local verify. */
 export async function attested(model: string, system: string, user: string, c: Case, attempts = 3): Promise<Attested> {
-  const provider = await pickProvider(model);
-  const svc = await service(provider);
-  if (svc.verifiability !== "TeeML") throw new Error(`provider ${provider} is ${svc.verifiability}, not TeeML`);
+  const self = isSelfModel(model);
+  const svc = self ? undefined : await service(await pickProvider(model));
+  if (svc && svc.verifiability !== "TeeML") throw new Error(`provider ${svc.provider} is ${svc.verifiability}, not TeeML`);
+  const body = { messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: 0, max_tokens: 1200 };
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const r = await directChat(provider, {
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        temperature: 0, max_tokens: 1200,
-      });
+      const r = self ? await selfChat(model, body) : await directChat(svc!.provider, body);
       const h = parseHeader(r.content);
       if (h.rubricHash !== c.rubricHash || h.evidenceHash !== c.evidenceHash) {
         throw new Error(`model echoed wrong hashes (rubric ${h.rubricHash}, evid ${h.evidenceHash})`);
       }
       if (r.content.length > HEADER_LEN + RATIONALE_MAX + 100) throw new Error("rationale too long");
       if (/[\\"]/.test(r.content.slice(0, HEADER_LEN))) throw new Error("header contains escaped characters");
+      // the oracle parses the FIRST `"VERDICT:` in the response bytes; it must be the reply's own header
+      const raw = new TextDecoder().decode(r.respBody);
+      const first = raw.indexOf('"VERDICT:');
+      if (first < 0 || raw.slice(first + 1, first + 1 + HEADER_LEN) !== r.content.slice(0, HEADER_LEN)) {
+        throw new Error("first \"VERDICT: in the response bytes is not the reply's header (e.g. a reasoning field quotes one)");
+      }
 
-      const sig = await fetchSignature(svc, r.chatId);
-      const want = await expectedSignedText(r.reqBody, r.respBody);
+      if (self) {
+        const s = r as SelfResult;
+        // self-attested: the signer is our own derived key; it doubles as the "provider" id
+        return {
+          reqBody: s.reqBody, respBody: s.respBody, signature: s.signature, signedText: s.signedText,
+          provider: s.signer, signer: s.signer, model, content: s.content, requestId: s.requestId, chatId: s.requestId,
+        };
+      }
+      const d = r as Awaited<ReturnType<typeof directChat>>;
+      const sig = await fetchSignature(svc!, d.chatId);
+      const want = await expectedSignedText(d.reqBody, d.respBody);
       if (sig.text !== want) {
         throw new Error(`signed text does not match our bytes.\n  provider: ${sig.text}\n  ours:     ${want}`);
       }
-      const ok = await verifyAttestation(sig.text, sig.signature, svc.signer);
-      if (!ok) throw new Error(`signature from ${svc.url} does not recover to enclave signer ${svc.signer}`);
+      const ok = await verifyAttestation(sig.text, sig.signature, svc!.signer);
+      if (!ok) throw new Error(`signature from ${svc!.url} does not recover to enclave signer ${svc!.signer}`);
 
       return {
-        reqBody: r.reqBody, respBody: r.respBody, signature: sig.signature, signedText: sig.text,
-        provider: svc.provider, signer: svc.signer, model: svc.model, content: r.content,
-        requestId: r.requestId, chatId: r.chatId,
+        reqBody: d.reqBody, respBody: d.respBody, signature: sig.signature, signedText: sig.text,
+        provider: svc!.provider, signer: svc!.signer, model: svc!.model, content: d.content,
+        requestId: d.requestId, chatId: d.chatId,
       };
     } catch (e) {
       lastErr = e;

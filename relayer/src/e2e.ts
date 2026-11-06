@@ -12,7 +12,8 @@
 import { keccak256, toHex, type Hex } from "viem";
 import { addr, erc20Abi, escrowAbi, oracleAbi, OUTCOME, publicClient, STATE, tx, USDC, wallet } from "./arc";
 import { buildBundle, JUDGES, toAttestedArg } from "./judges";
-import { mirrorProvider } from "./registry-mirror";
+import { mirrorProvider, registerSigner } from "./registry-mirror";
+import { isSelfModel } from "./selfsign";
 import type { Case } from "./types";
 
 const which = process.argv[2] ?? "pass";
@@ -71,13 +72,14 @@ const evHash = await payee.client.writeContract({ address: escrow, abi: escrowAb
 await publicClient.waitForTransactionReceipt({ hash: evHash });
 console.log(`evidence ${c.evidenceHash}  ${tx(evHash)}`);
 
-// 3. four attested model calls (real 0G TeeML providers, direct)
+// 3. attested model calls (0G TeeML providers direct, or self-attested free APIs)
 const bundle = await buildBundle(c);
 
 // 4. mirror signers (reads 0G chain, writes SignerRegistry on Arc if missing)
 console.log("registry mirror:");
-const providers = [...new Set([...bundle.judges, bundle.grounding, bundle.calibration].map((a) => a.provider))];
-for (const p of providers) await mirrorProvider(p);
+const all = [...bundle.judges, bundle.grounding, bundle.calibration];
+for (const p of new Set(all.filter((a) => !isSelfModel(a.model)).map((a) => a.provider))) await mirrorProvider(p);
+for (const a of new Map(all.filter((a) => isSelfModel(a.model)).map((a) => [a.signer, a])).values()) await registerSigner(a.provider, a.signer, a.model, 0n);
 
 // dry-run through the oracle first so a policy miss is visible before paying gas
 const [outcome, signers] = await publicClient.readContract({
