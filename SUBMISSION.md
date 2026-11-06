@@ -26,7 +26,22 @@ The signer is pluggable. The 0G Compute TeeML path (enclave signing keys read fr
 **Links:**
 - Repo: https://github.com/Atharv181/verdict
 - Live dApp: https://atharv181.github.io/verdict/web/
-- VerdictEscrow: https://explorer.testnet.arc.io/address/0x49bdAB3BAdDdCed369347b89325b7Af058440359
+- VerdictEscrow: https://explorer.testnet.arc.io/address/0x49bdAB3BAdDdCed369347b89325b7Af058440359 · VerdictOracle `0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE` · SignerRegistry `0x0148950580C3F20855b49f199CF254D602E489A6`
+- Arc Studio: `<webUrl printed by arc-studio clone — see below>` **(required for the Arc track)**
+
+**Arc Studio (you must do this; it needs your login):**
+
+```bash
+npm i -g @circle-fin/arc-studio-cli
+arc-studio login
+arc-studio clone https://github.com/Atharv181/verdict     # repo must be public; prints a webUrl
+```
+
+Put that `webUrl` in the Links above and in the README's Arc Studio line.
+
+**Team handles:** `<Telegram>` · `<X>`
+
+**AI tools:** Built with Claude Code (Anthropic) as a pair programmer, which is allowed under ETHGlobal rules. All contract logic, live runs and claims were verified on-chain.
 
 ## Live evidence (Arc testnet)
 
@@ -61,7 +76,8 @@ cd verdict && set -a && source .env && set +a && cd relayer
 3. **Anyone can verify (1:20–1:50).** On the live dApp, paste that settle tx into **Verify**. The page re-hashes every attestation and shows the recovered signers. Point out the "SELF-ATTESTED" label: it is honest about tonight's signer.
 4. **Escalation and the arbiter (1:50–2:30).** In the dApp, **Load** escrow `0x4dcc…70a5`. The state is *Escalated*: both judges answered U, because the rubric hinges on a private call that text evidence can't show. Connect the arbiter wallet and click **Arbiter: release to payee** (or refund). Show the state flip to Resolved.
 5. **Agents pay per verdict (2:30–2:50).** Run `bun run src/api.ts` in one terminal and `bun run src/pay.ts` in another (both set up as above). Show the 402 quote, the signed EIP-3009 authorization, the 200 response, and exactly 0.05 USDC leaving the buyer.
-6. **Close (2:50–3:00).** "The signer is pluggable. The 0G TeeML enclave path is built and tested; with 0G tokens it is a `.env` change."
+6. **Arc Studio (≈10 s).** Show the Arc Studio tab with the cloned project (the `webUrl` from above).
+7. **Close (2:50–3:00).** "The signer is pluggable. The 0G TeeML enclave path is built and tested; with 0G tokens it is a `.env` change."
 
 Note for the recording: the Groq free tier allows about 1000 output tokens per minute for qwen, and the relayer waits out 429s, so step 2 can pause for 10–40 s. Run it once before recording so the video can be trimmed.
 

@@ -269,6 +269,8 @@ bun run src/verify.ts 0x<settle tx>               # re-check any settlement from
 bun run src/api.ts   &   bun run src/pay.ts       # x402: buy one verdict for 0.05 USDC
 ```
 
+**Arc Studio:** `<webUrl from arc-studio clone https://github.com/Atharv181/verdict>` (pending the owner's `arc-studio login`).
+
 Open the live dApp at **[atharv181.github.io/verdict/web](https://atharv181.github.io/verdict/web/)** (GitHub Pages, served from `web/`), or `web/index.html` locally, to open escrows, commit evidence, and run the same verification in your browser — it decodes the settle calldata, re-hashes the bytes, recovers the signers and reads 0G chain itself.
 
 Piecewise: `scripts/deploy.sh` · `bun run src/spike.ts [model]` · `bun run src/registry-mirror.ts` · `bun run src/e2e.ts pass|fail|injected|undecidable` (`ARBITRATE=release|refund` to resolve an escalation) · `bun run src/api.ts` (x402 API) · `bun run src/pay.ts` (x402 client: quote, sign, pay).
