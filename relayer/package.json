@@ -8,7 +8,8 @@
     "spike": "bun run src/spike.ts",
     "mirror": "bun run src/registry-mirror.ts",
     "e2e": "bun run src/e2e.ts",
-    "api": "bun run src/api.ts"
+    "api": "bun run src/api.ts",
+    "pay": "bun run src/pay.ts"
   },
   "dependencies": {
     "@0gfoundation/0g-compute-ts-sdk": "^0.9.0",

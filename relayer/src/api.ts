@@ -1,5 +1,6 @@
-// Verdict-as-a-service over x402: agents pay USDC on Arc per verdict, settled through
-// Circle's Facilitator Service (https://developers.circle.com/facilitator-service).
+// Verdict-as-a-service over x402: agents pay USDC on Arc per verdict. Settlement goes through
+// Circle's Facilitator Service (https://developers.circle.com/facilitator-service) when
+// CIRCLE_API_KEY is set, otherwise through the local EIP-3009 facilitator in x402.ts.
 //
 //   POST /verdict  { rubric, evidence }
 //     -> 402 + PAYMENT-REQUIRED header (x402) when unpaid
@@ -7,13 +8,14 @@
 //   GET  /health
 //
 // Env: ARC_PRIVATE_KEY (payTo = this wallet), VERDICT_PRICE_USDC (default 0.05),
-//      CIRCLE_API_KEY (facilitator settle; keyless trial is not implemented here).
+//      CIRCLE_API_KEY (optional; unset = local facilitator, the server wallet pays settle gas).
 //   bun run src/api.ts
 
 import { encodeFunctionData, keccak256, toHex } from "viem";
 import { escrowAbi, USDC, wallet } from "./arc";
 import { buildBundle, toAttestedArg } from "./judges";
 import type { Case } from "./types";
+import { settlePayment, verifyPayment, type PaymentPayload } from "./x402";
 
 const FACILITATOR = process.env.CIRCLE_FACILITATOR ?? "https://api.circle.com/v1/facilitator/x402";
 const NETWORK = `eip155:${process.env.ARC_CHAIN_ID ?? 5042002}`;
@@ -30,7 +32,7 @@ function requirements(resource: string) {
     payTo,
     maxTimeoutSeconds: 600,
     resource,
-    description: "One TEE-attested Verdict bundle (4 signed model attestations)",
+    description: "One Verdict bundle (signed model attestations for VerdictEscrow.settle)",
     mimeType: "application/json",
     extra: { name: "USDC", version: "2" },
   };
@@ -44,9 +46,13 @@ function paymentRequired(resource: string): Response {
   });
 }
 
-async function facilitator(path: "verify" | "settle", paymentPayload: unknown, paymentRequirements: unknown) {
+async function facilitator(path: "verify" | "settle", paymentPayload: unknown, paymentRequirements: ReturnType<typeof requirements>) {
   const key = process.env.CIRCLE_API_KEY;
-  if (!key) throw new Error("CIRCLE_API_KEY is not set; the facilitator keyless trial is not wired in this API");
+  if (!key) {
+    return path === "verify"
+      ? verifyPayment(paymentPayload as PaymentPayload, paymentRequirements)
+      : settlePayment(paymentPayload as PaymentPayload);
+  }
   const res = await fetch(`${FACILITATOR}/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -81,6 +87,7 @@ Bun.serve({
     const bundle = await buildBundle(c, () => {});
 
     const settlement = await facilitator("settle", paymentPayload, reqs);
+    if (settlement.success === false) return Response.json({ error: "payment settlement failed", detail: settlement }, { status: 402 });
 
     const requestIds = [...bundle.judges, bundle.grounding, bundle.calibration].map((a) => a.requestId);
     const args = [bundle.judges.map(toAttestedArg), toAttestedArg(bundle.grounding), toAttestedArg(bundle.calibration)] as const;
@@ -96,4 +103,4 @@ Bun.serve({
   },
 });
 
-console.log(`verdict api on :${PORT}  payTo ${payTo}  price ${PRICE} (atomic USDC) on ${NETWORK}`);
+console.log(`verdict api on :${PORT}  payTo ${payTo}  price ${PRICE} (atomic USDC) on ${NETWORK}  facilitator ${process.env.CIRCLE_API_KEY ? FACILITATOR : "local (EIP-3009)"}`);
