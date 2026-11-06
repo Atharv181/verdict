@@ -9,6 +9,8 @@ USDC escrow on Arc. Two LLM judges, a grounding check and a calibration pass dec
 [![0G](https://img.shields.io/badge/0G-TeeML_(implemented,_unfunded)-5b8cff)](https://docs.0g.ai)
 [![ETHGlobal](https://img.shields.io/badge/ETHGlobal-Mumbai-e8ebf2)](https://ethglobal.com/events/mumbai)
 
+**Live dApp:** [atharv181.github.io/verdict/web](https://atharv181.github.io/verdict/web/) · **Repo:** [github.com/Atharv181/verdict](https://github.com/Atharv181/verdict)
+
 > [!IMPORTANT]
 > **Status, honestly.** The escrows in [Live run](#live-run) settled on Arc testnet in **self-attested mode**. Real models (Groq: `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`) produced the verdicts, and the relayer kept the exact bytes and signed `sha256(req):sha256(resp)` with its own per-model key. In this mode **the relayer is a trusted signer**: it could sign a reply the API never sent. These runs prove the escrow, binding and policy logic end to end, not model provenance.
 > The 0G TeeML signer (enclave keys read from 0G `InferenceServing`) is fully implemented and covered by the contract tests, but it never ran live. A 0G ledger needs 3 0G, and we couldn't get that in time (the testnet faucet gives 0.1 0G/day). The contracts are identical in both modes; only the registered signers differ.
@@ -269,7 +271,7 @@ cp .env.example .env
 (cd relayer && bun run src/verify.ts 0x<settle tx>)
 ```
 
-Open `web/index.html` (or the GitHub Pages deployment) to open escrows, commit evidence, and run the same verification in your browser — it decodes the settle calldata, re-hashes the bytes, recovers the signers and reads 0G chain itself.
+Open the live dApp at **[atharv181.github.io/verdict/web](https://atharv181.github.io/verdict/web/)** (GitHub Pages, served from `web/`), or `web/index.html` locally, to open escrows, commit evidence, and run the same verification in your browser — it decodes the settle calldata, re-hashes the bytes, recovers the signers and reads 0G chain itself.
 
 Piecewise: `scripts/deploy.sh` · `bun run src/spike.ts [model]` · `bun run src/registry-mirror.ts` · `bun run src/e2e.ts pass|fail|injected|undecidable` (`ARBITRATE=release|refund` to resolve an escalation) · `bun run src/api.ts` (x402 API) · `bun run src/pay.ts` (x402 client: quote, sign, pay).
 
