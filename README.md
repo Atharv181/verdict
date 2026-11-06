@@ -229,6 +229,14 @@ Arc testnet (chain `5042002`), deployed by `scripts/deploy.sh`, also in [`web/ad
 | VerdictOracle | [`0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE`](https://explorer.testnet.arc.io/address/0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE) | [`0xed154067…`](https://explorer.testnet.arc.io/tx/0xed154067c84b7a4c384d94ac9d5e74ba44b24ddb78b1350414cdeaf894c1aadd) |
 | VerdictEscrow | [`0x49bdAB3BAdDdCed369347b89325b7Af058440359`](https://explorer.testnet.arc.io/address/0x49bdAB3BAdDdCed369347b89325b7Af058440359) | [`0xc6634150…`](https://explorer.testnet.arc.io/tx/0xc663415031a020e51e67664d031795383330fb7521e3b184e16e63126e74cc07) |
 
+Enclave signers mirrored into `SignerRegistry` by `bun run src/registry-mirror.ts`, each read from 0G mainnet `InferenceServing` at the block shown:
+
+| Model (`Service.model`) | Provider | Enclave signer | 0G block | Sync tx |
+|---|---|---|---|---|
+| `glm-5.3` | `0xD179F4526064846dE9a9E9D93683AF75CB72E503` | `0x0766BC72beB6dAe764eE51C781c0A68117E69179` | 49488212 | [`0x0b7c397b…`](https://explorer.testnet.arc.io/tx/0x0b7c397ba35ea41ff3ccbdf0689a63df8b39981e75f96c955c3383560fcf1131) |
+| `0GM-1.0-35B-A3B` | `0xf4FB8d2bD856e672b5f9848b0eD235A20079B250` | `0xDdaEaac4d8525d72DfD20cc6dE0f28eb3d320Bfb` | 49488219 | [`0x29f75924…`](https://explorer.testnet.arc.io/tx/0x29f759243e08ad4d1b797eb619be91e57a739020a690ae874561f8400c2fb028) |
+| `0GM-1.0-35B-A3B-SIA` | `0x15aDd680050Ecd0B25eb7d480e7BB1f48594Eabe` | `0xbDb8daCECec80319128C1E52A15053f04C6F8CE7` | 49488219 | [`0x8332fe3d…`](https://explorer.testnet.arc.io/tx/0x8332fe3d4ce10f06ce6899c9d1f204903285bc891d874c9d7d7cf7ee73d10e69) |
+
 ---
 
 Built at ETHGlobal Mumbai, Nov 2026. *Models judge; enclaves sign; contracts check. Nobody is trusted.*
