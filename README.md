@@ -269,7 +269,7 @@ bun run src/verify.ts 0x<settle tx>               # re-check any settlement from
 bun run src/api.ts   &   bun run src/pay.ts       # x402: buy one verdict for 0.05 USDC
 ```
 
-**Arc Studio:** `<webUrl from arc-studio clone https://github.com/Atharv181/verdict>` (pending the owner's `arc-studio login`).
+**Arc Studio:** [https://studio.arc.io/app/89b937cc-dbea-475b-9e27-53aa58722c00](https://studio.arc.io/app/89b937cc-dbea-475b-9e27-53aa58722c00). The repo is cloned into the Studio sandbox, where Arc Studio ran `forge build` (46 files, solc 0.8.28) and `forge test`: 20/20 pass, no files changed.
 
 Open the live dApp at **[atharv181.github.io/verdict/web](https://atharv181.github.io/verdict/web/)** (GitHub Pages, served from `web/`), or `web/index.html` locally, to open escrows, commit evidence, and run the same verification in your browser — it decodes the settle calldata, re-hashes the bytes, recovers the signers and reads 0G chain itself.
 
