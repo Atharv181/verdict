@@ -221,13 +221,13 @@ FEEDBACK.md  what we'd fix in 0G's and Arc's docs after building this
 
 ## Deployed addresses
 
-Filled by `scripts/deploy.sh` into `.env` and `web/addresses.json`:
+Arc testnet (chain `5042002`), deployed by `scripts/deploy.sh`, also in [`web/addresses.json`](web/addresses.json):
 
-| Contract | Arc testnet |
-|---|---|
-| SignerRegistry | — |
-| VerdictOracle | — |
-| VerdictEscrow | — |
+| Contract | Address | Deploy tx |
+|---|---|---|
+| SignerRegistry | [`0x0148950580C3F20855b49f199CF254D602E489A6`](https://explorer.testnet.arc.io/address/0x0148950580C3F20855b49f199CF254D602E489A6) | [`0x36e31a75…`](https://explorer.testnet.arc.io/tx/0x36e31a756c533148f90f94a9960fbac51bd56e819bcf7a91600b86d775ad9d8f) |
+| VerdictOracle | [`0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE`](https://explorer.testnet.arc.io/address/0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE) | [`0xed154067…`](https://explorer.testnet.arc.io/tx/0xed154067c84b7a4c384d94ac9d5e74ba44b24ddb78b1350414cdeaf894c1aadd) |
+| VerdictEscrow | [`0x49bdAB3BAdDdCed369347b89325b7Af058440359`](https://explorer.testnet.arc.io/address/0x49bdAB3BAdDdCed369347b89325b7Af058440359) | [`0xc6634150…`](https://explorer.testnet.arc.io/tx/0xc663415031a020e51e67664d031795383330fb7521e3b184e16e63126e74cc07) |
 
 ---
 

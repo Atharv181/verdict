@@ -1,8 +1,8 @@
 {
   "network": "arc-testnet",
   "chainId": 5042002,
-  "escrow": null,
-  "oracle": null,
-  "registry": null,
-  "note": "filled by scripts/deploy.sh after deployment"
+  "escrow": "0x49bdAB3BAdDdCed369347b89325b7Af058440359",
+  "oracle": "0xdff4D8727642CbED13dC1Df29A1EfE70a59C4cbE",
+  "registry": "0x0148950580C3F20855b49f199CF254D602E489A6",
+  "explorer": "https://explorer.testnet.arc.io"
 }
