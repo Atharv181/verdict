@@ -46,13 +46,21 @@ export async function selfChat(model: string, body: Record<string, unknown>): Pr
   const key = process.env[b.keyEnv];
   if (!key) throw new Error(`${b.keyEnv} is not set (needed for ${model})`);
   const reqBody = new TextEncoder().encode(JSON.stringify({ ...body, ...b.extra, model: rest.join(":") }));
-  const res = await fetch(b.url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: reqBody,
-  });
-  const respBody = new Uint8Array(await res.arrayBuffer());
-  const text = new TextDecoder().decode(respBody);
+  let res: Response, respBody: Uint8Array, text: string;
+  for (let wait = 0; ; wait++) {
+    res = await fetch(b.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: reqBody,
+    });
+    respBody = new Uint8Array(await res.arrayBuffer());
+    text = new TextDecoder().decode(respBody);
+    // free tiers rate-limit per minute: wait as told ("try again in 4.74s" / retry-after), up to 5 times
+    if (res.status !== 429 || wait >= 5) break;
+    const s = Number(res.headers.get("retry-after") ?? text.match(/try again in ([\d.]+)s/)?.[1] ?? 10);
+    console.warn(`[${model}] 429, waiting ${Math.ceil(s + 1)}s`);
+    await new Promise((r) => setTimeout(r, (s + 1) * 1000));
+  }
   if (!res.ok) throw new Error(`${backend} HTTP ${res.status}: ${text.slice(0, 400)}`);
   const json = JSON.parse(text);
   const content: string = json.choices?.[0]?.message?.content ?? "";
