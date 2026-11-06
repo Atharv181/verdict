@@ -251,24 +251,22 @@ These are rejected with `402` before any model is called: underpayment (`amount 
 # 0. clone + deps
 git clone https://github.com/Atharv181/verdict && cd verdict
 (cd relayer && bun install)                # contracts/lib is vendored; nothing to install there
-cp .env.example .env
+cp .env.example .env                       # defaults to the self-attested Groq pipeline
 
-# 1. 0G wallet → .env ZG_PRIVATE_KEY
-#    testnet (default .env.example): ~3.5 0G from the 0G faucet (3 ledger min + ZG_SUB_FUND=0.5)
-#    mainnet: ~4.5 0G (3 ledger + 0.5 × 3 providers); the ledger deposit can be withdrawn afterwards
-(cd relayer && bun run src/fund.ts)        # ledger + sub-accounts; skips sub-accounts already funded
+# 1. keys in .env
+#    ARC_PRIVATE_KEY + PAYEE_PRIVATE_KEY: fund both from https://faucet.circle.com (Arc Testnet)
+#    GROQ_API_KEY: free at https://console.groq.com (self-attested mode: the relayer signs; no TEE claim)
+#    0G TeeML mode instead: swap in the mainnet block of .env.example and fund ZG_PRIVATE_KEY
+#    (~4.5 0G: 3 ledger + 0.5 x 3 providers; the ledger deposit can be withdrawn afterwards)
 
-# 2. Arc: fund ARC_ADDRESS and PAYEE_ADDRESS from https://faucet.circle.com (Arc Testnet)
+# 2. everything: deploy if needed -> (0G only: fund + spike) -> mirror signers -> pass / fail / injected
+./scripts/run-e2e.sh                       # or: ./scripts/run-e2e.sh undecidable
 
-#    or, with no 0G: self-attested mode (the relayer signs; no TEE claim). Put GROQ_API_KEY in .env,
-#    set JUDGE_A/JUDGE_B/GROUNDING/CALIBRATION to groq:<model> ids, skip fund.ts and spike.ts,
-#    then run deploy.sh · registry-mirror.ts · e2e.ts pass|fail|injected
-
-# 3. everything (0G TeeML mode)
-./scripts/run-e2e.sh                       # deploy → spike → mirror signers → pass / fail / injected
-
-# 4. verify any settlement from public data only
-(cd relayer && bun run src/verify.ts 0x<settle tx>)
+# 3. piecewise: Bun reads .env from the current folder only, so load the root .env first
+set -a && source .env && set +a && cd relayer
+ARBITRATE=refund bun run src/e2e.ts undecidable   # ESCALATE, then the arbiter decides
+bun run src/verify.ts 0x<settle tx>               # re-check any settlement from public data
+bun run src/api.ts   &   bun run src/pay.ts       # x402: buy one verdict for 0.05 USDC
 ```
 
 Open the live dApp at **[atharv181.github.io/verdict/web](https://atharv181.github.io/verdict/web/)** (GitHub Pages, served from `web/`), or `web/index.html` locally, to open escrows, commit evidence, and run the same verification in your browser — it decodes the settle calldata, re-hashes the bytes, recovers the signers and reads 0G chain itself.
