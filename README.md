@@ -38,7 +38,7 @@ flowchart TB
         E["VerdictEscrow<br/>lock · release · refund · escalate"]
         O["VerdictOracle<br/>sha256 ×2 → EIP-191 → ecrecover<br/>registry · request binding · header parse · quorum"]
         R["SignerRegistry<br/>provider → enclave signer<br/>(mirrored from 0G chain, block-stamped)"]
-        X["x402 / Circle Gateway<br/>agents pay per verdict<br/>(prototype, untested)"]
+        X["x402 · EIP-3009 Arc USDC<br/>agents pay per verdict"]
         E -- "oracle.resolve(bundle)" --> O
         O -- "isSigner · providerOf · modelOf" --> R
     end
@@ -48,7 +48,7 @@ flowchart TB
         D["dApp (web/)<br/>open · evidence · verify-in-browser"]
         RL["Relayer (relayer/)<br/>judges · signature fetch · bundle"]
         M["Registry mirror<br/>reads InferenceServing.getService"]
-        API["Verdict API<br/>x402-gated POST /verdict<br/>(prototype, untested)"]
+        API["Verdict API<br/>x402-gated POST /verdict"]
     end
 
     subgraph ZG["0G Compute · TeeML providers · Intel TDX · dstack attestation"]
@@ -215,6 +215,19 @@ Notes: Arc gas is paid in USDC, so the balance deltas the e2e script prints are 
 
 These are Groq response ids, not 0G request ids. Re-check any row from public data with `bun run src/verify.ts <settle tx>`, or with **Verify** in the dApp.
 
+### x402: agents pay per verdict
+
+`POST /verdict {rubric, evidence}` on `api.ts` answers `402` with an x402 v2 `PAYMENT-REQUIRED` quote (0.05 USDC on `eip155:5042002`). The agent signs an EIP-3009 `TransferWithAuthorization` for Arc USDC and retries with `PAYMENT-SIGNATURE`. It gets back the attestation bundle plus `settleCalldata` for `VerdictEscrow.settle`. Without `CIRCLE_API_KEY` the server is its own facilitator ([`x402.ts`](relayer/src/x402.ts)). It checks payTo, amount, the validity window, the EIP-712 signature (domain `USDC`/`2`, which reproduces the token's on-chain `DOMAIN_SEPARATOR`), the unused nonce and the balance. Then it submits `transferWithAuthorization` itself, paying the gas. With a key, the same calls go to Circle's facilitator.
+
+Live run with `bun run src/pay.ts`:
+
+- unpaid → `402`
+- paid → `200` with 4 attestations
+- payer balance `20.991911 → 20.941911` USDC (exactly 0.05, no payer gas)
+- payment tx [`0xf20ef6d7…`](https://explorer.testnet.arc.io/tx/0xf20ef6d76e6dc6e4eb282b8639bd82fcbba42d3dc235265497720f2a52f710c8)
+
+These are rejected with `402` before any model is called: underpayment (`amount below price`), a tampered `validBefore` (`bad signature`), and a replay of that settled authorization (`nonce already used`).
+
 ## Verified so far
 
 - **`forge test` → 20/20.** Single-judge release on YES and escalate when ungrounded · release on YES · refund on NO · escalate on disagreement / low confidence / ungrounded · arbiter path · tampered response · tampered request · replay from another escrow · header for the wrong escrow · missing header · unregistered signer · revoked signer · provider mismatch · same model twice · refund after deadline · signed-text format equals the broker's.
@@ -222,6 +235,7 @@ These are Groq response ids, not 0G request ids. Re-check any row from public da
 - **Live 0G reads.** `bun run src/providers.ts <model>` hits the real `InferenceServing` and each provider's signature endpoint (answers `404 chat_id_not_found` for an unknown id, as it should).
 - **Arc testnet.** chain `5042002`, ERC-20 USDC `0x3600…` = 6 decimals (native gas USDC = 18).
 - **Relayer** typechecks, byte-exact verification before any gas is spent (Direct mode for 0G; the same check for self-attested calls).
+- **x402 on Arc**: one paid verdict settled via EIP-3009; underpay, tamper and replay rejected; see [x402](#x402-agents-pay-per-verdict).
 - **Live settlements on Arc** in self-attested mode; see [Live run](#live-run). No settlement has used a 0G enclave signature yet.
 
 ## Run it for real
@@ -252,7 +266,7 @@ cp .env.example .env
 
 Open `web/index.html` (or the GitHub Pages deployment) to open escrows, commit evidence, and run the same verification in your browser — it decodes the settle calldata, re-hashes the bytes, recovers the signers and reads 0G chain itself.
 
-Piecewise: `scripts/deploy.sh` · `bun run src/spike.ts [model]` · `bun run src/registry-mirror.ts` · `bun run src/e2e.ts pass|fail|injected` · `bun run src/api.ts` (x402 prototype; **untested**, not part of the live run).
+Piecewise: `scripts/deploy.sh` · `bun run src/spike.ts [model]` · `bun run src/registry-mirror.ts` · `bun run src/e2e.ts pass|fail|injected` · `bun run src/api.ts` (x402 API) · `bun run src/pay.ts` (x402 client: quote, sign, pay).
 
 ## Repository
 
@@ -260,7 +274,7 @@ Piecewise: `scripts/deploy.sh` · `bun run src/spike.ts [model]` · `bun run src
 contracts/   Foundry (via-IR). SignerRegistry · VerdictOracle · VerdictEscrow · 20 tests · Deploy script
 relayer/     Bun + viem + 0G SDK. Direct-mode client, judges, signature fetch, registry mirror,
              self-attested signer (selfsign.ts), e2e on Arc, independent verifier,
-             x402 API prototype (untested), funding helper
+             x402 API (local EIP-3009 facilitator, or Circle's) + client, funding helper
 web/         Zero-build dApp: wallet, open, evidence, state, in-browser verification
 scripts/     deploy.sh · run-e2e.sh
 FEEDBACK.md  what we'd fix in 0G's and Arc's docs after building this
