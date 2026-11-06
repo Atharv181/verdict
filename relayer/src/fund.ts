@@ -16,8 +16,12 @@ const b = await broker();
 let ledgerOk = true;
 try { await b.ledger.getLedger(); } catch { ledgerOk = false; }
 if (!ledgerOk) {
-  console.log("creating ledger with 3 0G ...");
-  await b.ledger.depositFund(3);
+  // The SDK refuses < 3 0G client-side, but the binding rule is LedgerManager.MIN_ACCOUNT_BALANCE
+  // (0.1 0G on Galileo). ZG_LEDGER_FUND below 3 goes straight to the contract.
+  const LEDGER = process.env.ZG_LEDGER_FUND ?? "3";
+  console.log(`creating ledger with ${LEDGER} 0G ...`);
+  if (Number(LEDGER) >= 3) await b.ledger.depositFund(Number(LEDGER));
+  else await (b.ledger as any).ledger.ledgerContract.depositFund(ethers.parseEther(LEDGER).toString());
 }
 for (const m of PIPELINE_MODELS) {
   const p = await pickProvider(m);
