@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Verdict — TEE-attested AI oracle</title>
-<meta name="description" content="USDC escrow on Arc that settles only on enclave-signed model verdicts from 0G Compute." />
+<meta name="description" content="USDC escrow on Arc that settles only on signed, byte-bound LLM verdicts, checked on-chain." />
 <style>
   :root{--bg:#0b0d12;--panel:#12151d;--line:#1f2430;--ink:#e8ebf2;--mute:#8b93a7;--acc:#5b8cff;--good:#2fbf71;--warn:#f5a524;--bad:#ff5c5c;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,sans-serif}
@@ -41,7 +41,7 @@
 <header>
   <div>
     <h1><span>Verdict</span> — TEE-attested AI oracle</h1>
-    <div class="sub">USDC escrow on Arc that settles only when 0G enclaves signed the verdict. Everything on this page talks to Arc testnet and 0G chain directly.</div>
+    <div class="sub">USDC escrow on Arc that settles only on signed, byte-bound LLM verdicts. The signer is pluggable: 0G TeeML enclaves (implemented) or, in tonight's live runs, a self-attested relayer key. Everything on this page talks to Arc testnet and 0G chain directly.</div>
   </div>
   <div class="row">
     <span id="net" class="pill">Arc testnet 5042002</span>
@@ -55,8 +55,8 @@
     <div class="flow">
       <div><b>1 · Lock</b>Payer locks USDC against a rubric. Only keccak(rubric) is stored.</div>
       <div><b>2 · Evidence</b>Payee commits keccak(evidence). The prompt will name both hashes.</div>
-      <div><b>3 · Judge</b>Relayer calls 4 TeeML models directly, keeps the exact request and response bytes.</div>
-      <div><b>4 · Sign</b>Each enclave signs sha256(req):sha256(resp) with its on-chain key.</div>
+      <div><b>3 · Judge</b>Relayer makes 4 model calls (judge A, judge B, grounding, calibration) and keeps the exact request and response bytes.</div>
+      <div><b>4 · Sign</b>A registered signer signs sha256(req):sha256(resp): a 0G enclave key, or the relayer's per-model key in self-attested mode.</div>
       <div><b>5 · Settle</b>Contract re-hashes, ecrecovers, checks the registry and the header, moves USDC.</div>
     </div>
   </section>
