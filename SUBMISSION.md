@@ -76,5 +76,5 @@ Note for the recording: the Groq free tier allows about 1000 output tokens per m
 ## Known limits (say these if asked)
 
 - **Trusted signer:** live runs are signed by the relayer. That proves the escrow logic, not provenance. With 0G funds, enclave keys sign instead, and the contracts stay the same.
-- **Stuck test escrows:** four escrows from failed runs are still Open, each holding 1 testnet USDC. The contract only allows `refundAfterDeadline`, about 7 days after opening.
+- **Stuck test escrows:** five escrows from failed runs are still Open, each holding 1 testnet USDC. The contract only allows `refundAfterDeadline`, about 7 days after opening.
 - **The "ambiguous" attempt:** evidence of "92 on desktop, 84 on mobile", against a rubric that names neither, was meant to escalate. All models said Y, so it released. That is a defensible reading, so we replaced the case rather than tune it until it escalated.

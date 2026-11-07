@@ -216,7 +216,7 @@ Every outcome the escrow has (`YES` release, `NO` refund, `ESCALATE` + arbiter) 
 
 `verify.ts` on all four table settle txs (and the extra one): *"all signatures recover to registered signers; 4 of 4 are self-attested by the relayer (not enclave-backed)"*.
 
-Notes: Arc gas is paid in USDC, so the balance deltas the e2e script prints are net of about 0.0013 USDC gas per case. Four escrows opened by runs that then failed (three on Groq rate limits, one on an empty gpt-oss reply that ran out of completion tokens, since fixed) are still `Open`; each holds 1 testnet USDC until `refundAfterDeadline` (7 days). The `injected` case was meant to show `ESCALATE`, but both judges confidently answered N, so it refunded instead.
+Notes: Arc gas is paid in USDC, so the balance deltas the e2e script prints are net of about 0.0013 USDC gas per case. Five escrows opened by runs that then failed (two on Groq rate limits, one on qwen grounding replies that exceeded the rationale length, two on empty gpt-oss replies that ran out of completion tokens, since fixed) are still `Open`; each holds 1 testnet USDC until `refundAfterDeadline` (7 days). The `injected` case was meant to show `ESCALATE`, but both judges confidently answered N, so it refunded instead.
 
 These are Groq response ids, not 0G request ids. Re-check any row from public data with `bun run src/verify.ts <settle tx>`, or with **Verify** in the dApp.
 
